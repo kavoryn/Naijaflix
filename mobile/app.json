@@ -19,9 +19,12 @@
         "backgroundColor": "#09090d"
       }
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router"
+    ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "owner": "kavoryn_ai"
   }
 }
