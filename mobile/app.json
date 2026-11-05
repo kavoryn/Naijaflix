@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "NaijaFlix",
+    "slug": "naijaflix",
+    "scheme": "naijaflix",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#09090d"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.naijaflix.app"
+    },
+    "android": {
+      "package": "com.naijaflix.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#09090d"
+      }
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
