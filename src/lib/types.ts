@@ -1,0 +1,1 @@
+export type Movie={id:string;title:string;synopsis:string|null;genre:string|null;release_year:number|null;duration_minutes:number|null;poster_url:string|null;video_url:string|null;featured:boolean;published:boolean};
