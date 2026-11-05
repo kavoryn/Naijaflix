@@ -1,1 +1,139 @@
-"use client";import Link from "next/link";import {useEffect,useState} from "react";import {createClient} from "@/lib/supabase/client";export default function Manage(){const[rows,setRows]=useState<any[]>([]);const[title,setTitle]=useState("");const[genre,setGenre]=useState("");const[poster,setPoster]=useState("");const[video,setVideo]=useState("");const[message,setMessage]=useState("");async function load(){const s=createClient();const{data:{user}}=await s.auth.getUser();if(!user){location.href="/login";return}const{data:p}=await s.from("profiles").select("role").eq("id",user.id).single();if(p?.role!=="admin"){location.href="/";return}const{data}=await s.from("movies").select("*").order("created_at",{ascending:false});setRows(data||[])}useEffect(()=>{load()},[]);async function add(e:React.FormEvent){e.preventDefault();const{data:{user}}=await createClient().auth.getUser();const{error}=await createClient().from("movies").insert({title,genre,poster_url:poster,video_url:video,created_by:user?.id,published:false});setMessage(error?.message||"Movie saved as draft.");if(!error){setTitle("");load()}}async function publish(m:any){const{error}=await createClient().from("movies").update({published:!m.published}).eq("id",m.id);setMessage(error?.message||"Updated.");load()}return <main className="shell"><nav className="nav"><Link className="brand" href="/">NAIJA<span>FLIX</span></Link><Link href="/admin">Dashboard</Link></nav><h1>Manage movies</h1><div className="admin-layout"><form className="card" onSubmit={add}><h2>Add movie</h2><label>Title</label><input className="field" required value={title} onChange={e=>setTitle(e.target.value)}/><label>Genre</label><input className="field" value={genre} onChange={e=>setGenre(e.target.value)}/><label>Poster URL</label><input className="field" value={poster} onChange={e=>setPoster(e.target.value)}/><label>Licensed video URL</label><input className="field" value={video} onChange={e=>setVideo(e.target.value)}/><button className="btn">Save draft</button><p>{message}</p></form><div className="card"><h2>Catalogue</h2>{rows.map(m=><p key={m.id} className="row" style={{justifyContent:"space-between"}}>{m.title}<button className="btn secondary" onClick={()=>publish(m)}>{m.published?"Unpublish":"Publish"}</button></p>)}</div></div></main>
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+type Movie = {
+  id: string;
+  title: string;
+  genre: string | null;
+  published: boolean;
+};
+
+export default function ManageMoviesPage() {
+  const [rows, setRows] = useState<Movie[]>([]);
+  const [title, setTitle] = useState("");
+  const [genre, setGenre] = useState("");
+  const [poster, setPoster] = useState("");
+  const [video, setVideo] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role !== "admin") {
+      window.location.href = "/";
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("movies")
+      .select("id,title,genre,published")
+      .order("created_at", { ascending: false });
+
+    if (error) setMessage(error.message);
+    else setRows((data ?? []) as Movie[]);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function add(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setMessage("Please sign in again.");
+      setBusy(false);
+      return;
+    }
+
+    const { error } = await supabase.from("movies").insert({
+      title: title.trim(),
+      genre: genre.trim() || null,
+      poster_url: poster.trim() || null,
+      video_url: video.trim() || null,
+      created_by: user.id,
+      published: false,
+    });
+
+    setMessage(error?.message ?? "Movie saved as draft.");
+    if (!error) {
+      setTitle("");
+      setGenre("");
+      setPoster("");
+      setVideo("");
+      await load();
+    }
+    setBusy(false);
+  }
+
+  async function togglePublished(movie: Movie) {
+    setMessage("");
+    const { error } = await createClient()
+      .from("movies")
+      .update({ published: !movie.published })
+      .eq("id", movie.id);
+
+    setMessage(error?.message ?? "Movie status updated.");
+    if (!error) await load();
+  }
+
+  return (
+    <main className="shell">
+      <nav className="nav">
+        <Link className="brand" href="/">NAIJA<span>FLIX</span></Link>
+        <Link href="/admin">Dashboard</Link>
+      </nav>
+
+      <h1>Manage movies</h1>
+      <div className="admin-layout">
+        <form className="card" onSubmit={add}>
+          <h2>Add movie</h2>
+          <label htmlFor="movie-title">Title</label>
+          <input id="movie-title" className="field" required value={title} onChange={(e) => setTitle(e.target.value)} />
+          <label htmlFor="movie-genre">Genre</label>
+          <input id="movie-genre" className="field" value={genre} onChange={(e) => setGenre(e.target.value)} />
+          <label htmlFor="movie-poster">Poster URL</label>
+          <input id="movie-poster" className="field" type="url" value={poster} onChange={(e) => setPoster(e.target.value)} />
+          <label htmlFor="movie-video">Licensed video URL</label>
+          <input id="movie-video" className="field" type="url" value={video} onChange={(e) => setVideo(e.target.value)} />
+          <button className="btn" disabled={busy}>{busy ? "Saving..." : "Save draft"}</button>
+          {message && <p role="status">{message}</p>}
+        </form>
+
+        <section className="card">
+          <h2>Catalogue</h2>
+          {rows.length === 0 ? (
+            <p>No movies yet. Add your first movie as a draft.</p>
+          ) : rows.map((movie) => (
+            <div key={movie.id} className="row" style={{ justifyContent: "space-between", gap: "1rem" }}>
+              <span>{movie.title} · {movie.genre || "Uncategorised"}</span>
+              <button className="btn secondary" type="button" onClick={() => void togglePublished(movie)}>
+                {movie.published ? "Unpublish" : "Publish"}
+              </button>
+            </div>
+          ))}
+        </section>
+      </div>
+    </main>
+  );
+}
