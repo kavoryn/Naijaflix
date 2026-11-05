@@ -1,12 +1,17 @@
--- NaijaFlix Row Level Security policies. Review existing policies before applying.
-create policy "profiles_read_self" on public.profiles for select to authenticated using (id = auth.uid());
-create policy "profiles_update_self" on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
-create policy "movies_read_published" on public.movies for select to anon, authenticated using (published = true or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
-create policy "movies_admin_insert" on public.movies for insert to authenticated with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
-create policy "movies_admin_update" on public.movies for update to authenticated using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')) with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
-create policy "movies_admin_delete" on public.movies for delete to authenticated using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
-create policy "subscriptions_read_own" on public.subscriptions for select to authenticated using (user_id = auth.uid());
-create policy "watch_progress_select_own" on public.watch_progress for select to authenticated using (user_id = auth.uid());
-create policy "watch_progress_insert_own" on public.watch_progress for insert to authenticated with check (user_id = auth.uid());
-create policy "watch_progress_update_own" on public.watch_progress for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-create policy "watch_progress_delete_own" on public.watch_progress for delete to authenticated using (user_id = auth.uid());
+-- Existing Supabase project already has RLS policies on all NaijaFlix tables.
+-- This migration adds protection against users changing their own profile role.
+create or replace function public.prevent_profile_role_escalation()
+returns trigger language plpgsql set search_path = ''
+as $$
+begin
+  if new.role is distinct from old.role
+     and not exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin') then
+    raise exception 'Only an administrator can change profile roles';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists prevent_profile_role_escalation on public.profiles;
+create trigger prevent_profile_role_escalation
+before update on public.profiles
+for each row execute function public.prevent_profile_role_escalation();
