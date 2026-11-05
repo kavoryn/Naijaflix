@@ -1,16 +1,11 @@
 import { useState } from "react";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Pressable,StyleSheet,Text,View } from "react-native";
-const pages=[
-"Easily discover your favourites anywhere, at any time",
-"Browse clips to discover your next watch",
-"Stories, podcasts and games all in one app",
-"Keep track of everything you love",
-"Rate your favourites to shape what you see next",
-"All the entertainment you'll love, just a tap away"
-];
+const pages=["Easily discover your favourites anywhere, at any time","Browse clips to discover your next watch","Stories, podcasts and games all in one app","Keep track of everything you love","Rate your favourites to shape what you see next","All the entertainment you'll love, just a tap away"];
+async function finish(){await AsyncStorage.setItem("naijaflix_onboarding_done","yes");router.replace("/(tabs)");}
 export default function Onboarding(){
  const [step,setStep]=useState(0);
- return <View style={s.screen}><Text style={s.brand}>NAIJA<Text style={{color:"#f43f5e"}}>FLIX</Text></Text><View style={s.art}><Text style={s.symbol}>{["✦","▶","♫","♡","★","N"][step]}</Text></View><Text style={s.count}>{step+1} / 6</Text><Text style={s.title}>{pages[step]}</Text><View style={s.dots}>{pages.map((_,i)=><View key={i} style={[s.dot,i===step&&s.active]}/>)}</View><Pressable style={s.button} onPress={()=>step===5?router.replace("/(tabs)"):setStep(step+1)}><Text style={s.buttonText}>{step===5?"Get started":"Continue"}</Text></Pressable><Pressable onPress={()=>router.replace("/(tabs)")}><Text style={s.skip}>Skip</Text></Pressable></View>
+ return <View style={s.screen}><Text style={s.brand}>NAIJA<Text style={{color:"#f43f5e"}}>FLIX</Text></Text><View style={s.art}><Text style={s.symbol}>{["✦","▶","♫","♡","★","N"][step]}</Text></View><Text style={s.count}>{step+1} / 6</Text><Text style={s.title}>{pages[step]}</Text><View style={s.dots}>{pages.map((_,i)=><View key={i} style={[s.dot,i===step&&s.active]}/>)}</View><Pressable style={s.button} onPress={()=>step===5?finish():setStep(step+1)}><Text style={s.buttonText}>{step===5?"Get started":"Continue"}</Text></Pressable><Pressable onPress={finish}><Text style={s.skip}>Skip</Text></Pressable></View>;
 }
 const s=StyleSheet.create({screen:{flex:1,backgroundColor:"#09090d",padding:25,justifyContent:"center",alignItems:"center"},brand:{color:"white",fontSize:25,fontWeight:"900",position:"absolute",top:65},art:{width:230,height:230,borderRadius:35,backgroundColor:"#21121b",alignItems:"center",justifyContent:"center",marginBottom:40},symbol:{color:"#f43f5e",fontSize:100,fontWeight:"900"},count:{color:"#ff8297",fontWeight:"800",marginBottom:15},title:{color:"white",fontSize:27,fontWeight:"900",textAlign:"center",lineHeight:36,minHeight:115},dots:{flexDirection:"row",gap:7,marginVertical:25},dot:{width:7,height:7,borderRadius:5,backgroundColor:"#444"},active:{width:23,backgroundColor:"#f43f5e"},button:{width:"100%",backgroundColor:"#f43f5e",padding:16,borderRadius:11,alignItems:"center"},buttonText:{color:"white",fontWeight:"900"},skip:{color:"#999",marginTop:20}});
