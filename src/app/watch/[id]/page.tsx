@@ -1,1 +1,108 @@
-"use client";import Link from "next/link";import {useEffect,useState} from "react";import {useParams} from "next/navigation";import {createClient} from "@/lib/supabase/client";export default function Watch(){const{id}=useParams<{id:string}>();const[m,setM]=useState<any>(null);useEffect(()=>{(async()=>{const s=createClient();const{data}=await s.from("movies").select("*").eq("id",id).eq("published",true).single();setM(data);const{data:{user}}=await s.auth.getUser();if(user&&data)await s.from("watch_progress").upsert({user_id:user.id,movie_id:id,progress_seconds:0},{onConflict:"user_id,movie_id"})})()},[id]);return <main className="shell"><nav className="nav"><Link className="brand" href="/">NAIJA<span>FLIX</span></Link><Link href="/account">My account</Link></nav>{m?<section className="section"><h1>{m.title}</h1><p className="muted">{m.synopsis}</p>{m.video_url?<video controls playsInline style={{width:"100%",maxHeight:650}} src={m.video_url}/>:<div className="card">Video not yet added. The admin will add a licensed source.</div>}</section>:<p>Loading title…</p>}</main>}
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+type Movie = {
+  id: string;
+  title: string;
+  synopsis: string | null;
+  video_url: string | null;
+};
+
+export default function Watch() {
+  const { id } = useParams<{ id: string }>();
+  const [movie, setMovie] = useState<Movie | null>(null);
+  const [message, setMessage] = useState("Loading title…");
+  const lastSaved = useRef(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("movies")
+        .select("id,title,synopsis,video_url")
+        .eq("id", id)
+        .eq("published", true)
+        .single();
+
+      if (!active) return;
+      if (error || !data) {
+        setMessage("This title is unavailable or has not been published.");
+        return;
+      }
+      setMovie(data as Movie);
+      setMessage("");
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: progress } = await supabase
+          .from("watch_progress")
+          .select("progress_seconds")
+          .eq("user_id", user.id)
+          .eq("movie_id", id)
+          .maybeSingle();
+        if (active && progress?.progress_seconds && videoRef.current) {
+          videoRef.current.currentTime = progress.progress_seconds;
+          lastSaved.current = progress.progress_seconds;
+        }
+      }
+    }
+    void load();
+    return () => { active = false; };
+  }, [id]);
+
+  const saveProgress = useCallback(async (completed = false) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(video.currentTime)) return;
+    const seconds = Math.floor(video.currentTime);
+    if (!completed && seconds - lastSaved.current < 15) return;
+    lastSaved.current = seconds;
+    try {
+      await fetch("/api/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          movie_id: id,
+          progress_seconds: seconds,
+          completed,
+        }),
+      });
+    } catch {
+      // Playback should continue if progress saving is temporarily unavailable.
+    }
+  }, [id]);
+
+  return (
+    <main className="shell">
+      <nav className="nav">
+        <Link className="brand" href="/">NAIJA<span>FLIX</span></Link>
+        <Link href="/account">My account</Link>
+      </nav>
+      {movie ? (
+        <section className="section">
+          <h1>{movie.title}</h1>
+          {movie.synopsis && <p className="muted">{movie.synopsis}</p>}
+          {movie.video_url ? (
+            <video
+              ref={videoRef}
+              controls
+              playsInline
+              onTimeUpdate={() => void saveProgress()}
+              onPause={() => void saveProgress()}
+              onEnded={() => void saveProgress(true)}
+              style={{ width: "100%", maxHeight: 650 }}
+              src={movie.video_url}
+            />
+          ) : (
+            <div className="card">Video not yet added. The admin will add a licensed source.</div>
+          )}
+        </section>
+      ) : <p role="status">{message}</p>}
+    </main>
+  );
+}
