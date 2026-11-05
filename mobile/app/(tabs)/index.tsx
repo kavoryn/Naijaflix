@@ -1,93 +1,30 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect,useState } from "react";
+import { ActivityIndicator,FlatList,Image,Pressable,ScrollView,StyleSheet,Text,View } from "react-native";
 import { Link } from "expo-router";
 import { supabase } from "@/lib/supabase";
-
-type Movie = {
-  id: string; title: string; synopsis: string | null; genre: string | null;
-  release_year: number | null; poster_url: string | null; featured: boolean; plan: string;
-};
-
-function MovieCard({ movie }: { movie: Movie }) {
-  return (
-    <Link href={{ pathname: "/title/[id]", params: { id: movie.id } }} asChild>
-      <Pressable style={styles.movieCard}>
-        {movie.poster_url ? <Image source={{ uri: movie.poster_url }} style={styles.poster} /> : <View style={[styles.poster, styles.posterFallback]}><Text style={styles.fallbackText}>N</Text></View>}
-        <Text numberOfLines={1} style={styles.movieTitle}>{movie.title}</Text>
-        <Text style={styles.meta}>{movie.release_year || "New"} · {movie.plan === "premium" ? "PREMIUM" : "FREE"}</Text>
-      </Pressable>
-    </Link>
-  );
+type Movie={id:string;title:string;synopsis:string|null;genre:string|null;release_year:number|null;poster_url:string|null;featured:boolean;plan:string};
+function MovieCard({movie}:{movie:Movie}){return <Link href={{pathname:"/title/[id]",params:{id:movie.id}}} asChild><Pressable style={styles.movieCard}>{movie.poster_url?<Image source={{uri:movie.poster_url}} style={styles.poster}/>:<View style={[styles.poster,styles.posterFallback]}><Text style={styles.fallbackText}>N</Text></View>}<Text numberOfLines={1} style={styles.movieTitle}>{movie.title}</Text><Text style={styles.meta}>{movie.release_year||"New"} · {movie.plan==="premium"?"PREMIUM":"FREE"}</Text></Pressable></Link>}
+export default function HomeScreen(){
+ const [movies,setMovies]=useState<Movie[]>([]);const [continueMovies,setContinueMovies]=useState<Movie[]>([]);const [loading,setLoading]=useState(true);
+ useEffect(()=>{let alive=true;(async()=>{
+  const {data,error}=await supabase.from("movies_catalogue").select("id,title,synopsis,genre,release_year,poster_url,featured,plan").eq("published",true).order("featured",{ascending:false}).order("created_at",{ascending:false});
+  if(!alive)return;if(error)console.warn("Catalogue:",error.message);setMovies((data||[]) as Movie[]);
+  const {data:{user}}=await supabase.auth.getUser();
+  if(user){const {data:progress}=await supabase.from("watch_progress").select("movie_id,progress_seconds,completed").eq("user_id",user.id).eq("completed",false).order("updated_at",{ascending:false}).limit(12);
+   const ids=(progress||[]).filter(x=>x.progress_seconds>0).map(x=>x.movie_id);
+   if(ids.length){const {data:recent}=await supabase.from("movies_catalogue").select("id,title,synopsis,genre,release_year,poster_url,featured,plan").in("id",ids).eq("published",true);if(alive){const order=new Map(ids.map((id,i)=>[id,i]));setContinueMovies(((recent||[]) as Movie[]).sort((a,b)=>(order.get(a.id)??99)-(order.get(b.id)??99)));}}
+  }
+  if(alive)setLoading(false);
+ })();return()=>{alive=false}},[]);
+ const featured=movies.find(m=>m.featured)||movies[0];
+ return <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+  <View style={styles.header}><Text style={styles.brand}>NAIJA<Text style={styles.brandAccent}>FLIX</Text></Text><View style={styles.headerActions}><Pressable accessibilityLabel="Notifications"><Text style={styles.headerIcon}>♧</Text></Pressable><Pressable accessibilityLabel="Cast to TV"><Text style={styles.headerIcon}>▣</Text></Pressable></View></View>
+  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>{["Series","Films","Games","New & Hot","Categories"].map(item=><Text key={item} style={styles.category}>{item}</Text>)}</ScrollView>
+  {featured&&<View style={styles.hero}>{featured.poster_url?<Image source={{uri:featured.poster_url}} style={StyleSheet.absoluteFillObject}/>:null}<View style={styles.heroShade}/><View style={styles.heroText}><Text style={styles.eyebrow}>FEATURED ON NAIJAFLIX</Text><Text style={styles.heroTitle}>{featured.title}</Text><Text numberOfLines={2} style={styles.heroDescription}>{featured.synopsis||"Your next favourite story starts here."}</Text><View style={styles.heroButtons}><Link href={{pathname:"/title/[id]",params:{id:featured.id}}} asChild><Pressable style={styles.playButton}><Text style={styles.playText}>▶  Play</Text></Pressable></Link><Link href="/watchlist" asChild><Pressable style={styles.listButton}><Text style={styles.listText}>＋  My List</Text></Pressable></Link></View></View></View>}
+  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>New on NaijaFlix</Text></View>
+  {loading?<ActivityIndicator color="#f43f5e" style={{margin:30}}/>:movies.length?<FlatList horizontal data={movies} keyExtractor={m=>m.id} renderItem={({item})=><MovieCard movie={item}/>} showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingBottom:20}}/>:<Text style={styles.empty}>No published films yet. Add titles from the website admin dashboard.</Text>}
+  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your next watch</Text></View>
+  {continueMovies.length?<FlatList horizontal data={continueMovies} keyExtractor={m=>m.id} renderItem={({item})=><MovieCard movie={item}/>} showsHorizontalScrollIndicator={false}/>:<Text style={styles.empty}>Sign in and start watching to sync your progress across devices.</Text>}
+ </ScrollView>;
 }
-
-export default function HomeScreen() {
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    supabase.from("movies_catalogue").select("id,title,synopsis,genre,release_year,poster_url,featured,plan")
-      .eq("published", true).order("featured", { ascending: false }).order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (!alive) return;
-        if (error) console.warn("Catalogue:", error.message);
-        setMovies((data || []) as Movie[]);
-        setLoading(false);
-      });
-    return () => { alive = false; };
-  }, []);
-
-  const featured = movies.find((m) => m.featured) || movies[0];
-
-  return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.brand}>NAIJA<Text style={styles.brandAccent}>FLIX</Text></Text>
-        <View style={styles.headerActions}>
-          <Pressable accessibilityLabel="Notifications"><Text style={styles.headerIcon}>♧</Text></Pressable>
-          <Pressable accessibilityLabel="Cast to TV"><Text style={styles.headerIcon}>▣</Text></Pressable>
-        </View>
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>
-        {["Series", "Films", "Games", "New & Hot", "Categories"].map((item) => <Text key={item} style={styles.category}>{item}</Text>)}
-      </ScrollView>
-      {featured && <View style={styles.hero}>
-        {featured.poster_url ? <Image source={{ uri: featured.poster_url }} style={StyleSheet.absoluteFillObject} /> : null}
-        <View style={styles.heroShade} />
-        <View style={styles.heroText}>
-          <Text style={styles.eyebrow}>FEATURED ON NAIJAFLIX</Text>
-          <Text style={styles.heroTitle}>{featured.title}</Text>
-          <Text numberOfLines={2} style={styles.heroDescription}>{featured.synopsis || "Your next favourite story starts here."}</Text>
-          <View style={styles.heroButtons}>
-            <Link href={{ pathname: "/title/[id]", params: { id: featured.id } }} asChild><Pressable style={styles.playButton}><Text style={styles.playText}>▶  Play</Text></Pressable></Link>
-            <Pressable style={styles.listButton}><Text style={styles.listText}>＋  My List</Text></Pressable>
-          </View>
-        </View>
-      </View>}
-      <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>New on NaijaFlix</Text><Text style={styles.seeAll}>See all</Text></View>
-      {loading ? <ActivityIndicator color="#f43f5e" style={{ margin: 30 }} /> : movies.length ? <FlatList horizontal data={movies} keyExtractor={(m) => m.id} renderItem={({ item }) => <MovieCard movie={item} />} showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }} /> : <Text style={styles.empty}>No published films yet. Add titles from the website admin dashboard.</Text>}
-      <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your next watch</Text></View>
-      <Text style={styles.empty}>Sign in to sync your watch progress and watchlist across devices.</Text>
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#09090d" }, content: { paddingBottom: 24 },
-  header: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  brand: { color: "white", fontSize: 25, fontWeight: "900", letterSpacing: 1 }, brandAccent: { color: "#f43f5e" },
-  headerActions: { flexDirection: "row", gap: 18 }, headerIcon: { color: "white", fontSize: 23 },
-  categories: { paddingHorizontal: 20, gap: 23, paddingBottom: 16 }, category: { color: "#e7e7eb", fontSize: 14, fontWeight: "700" },
-  hero: { height: 390, marginHorizontal: 14, borderRadius: 18, overflow: "hidden", backgroundColor: "#29202a", justifyContent: "flex-end" },
-  heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.48)" },
-  heroText: { padding: 20 }, eyebrow: { color: "#ff8297", fontSize: 10, fontWeight: "900", letterSpacing: 2 },
-  heroTitle: { color: "white", fontSize: 32, fontWeight: "900", marginTop: 8 }, heroDescription: { color: "#eee", fontSize: 13, lineHeight: 19, marginTop: 8 },
-  heroButtons: { flexDirection: "row", gap: 10, marginTop: 17 }, playButton: { backgroundColor: "white", borderRadius: 8, paddingHorizontal: 23, paddingVertical: 11 },
-  playText: { color: "#111", fontWeight: "800" }, listButton: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, paddingHorizontal: 17, paddingVertical: 11 },
-  listText: { color: "white", fontWeight: "800" }, sectionHeading: { paddingHorizontal: 18, marginTop: 25, marginBottom: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  sectionTitle: { color: "white", fontSize: 19, fontWeight: "800" }, seeAll: { color: "#ff8297", fontSize: 12 },
-  movieCard: { width: 125, marginLeft: 14 }, poster: { width: 125, height: 178, borderRadius: 10, backgroundColor: "#24242d" },
-  posterFallback: { justifyContent: "center", alignItems: "center" }, fallbackText: { color: "#f43f5e", fontSize: 50, fontWeight: "900" },
-  movieTitle: { color: "white", fontSize: 13, fontWeight: "700", marginTop: 7 }, meta: { color: "#9999a5", fontSize: 10, marginTop: 4 },
-  empty: { color: "#9696a2", fontSize: 13, paddingHorizontal: 18, paddingBottom: 8 }
-});
+const styles=StyleSheet.create({screen:{flex:1,backgroundColor:"#09090d"},content:{paddingBottom:24},header:{paddingHorizontal:20,paddingTop:18,paddingBottom:14,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},brand:{color:"white",fontSize:25,fontWeight:"900",letterSpacing:1},brandAccent:{color:"#f43f5e"},headerActions:{flexDirection:"row",gap:18},headerIcon:{color:"white",fontSize:23},categories:{paddingHorizontal:20,gap:23,paddingBottom:16},category:{color:"#e7e7eb",fontSize:14,fontWeight:"700"},hero:{height:390,marginHorizontal:14,borderRadius:18,overflow:"hidden",backgroundColor:"#29202a",justifyContent:"flex-end"},heroShade:{...StyleSheet.absoluteFillObject,backgroundColor:"rgba(0,0,0,0.48)"},heroText:{padding:20},eyebrow:{color:"#ff8297",fontSize:10,fontWeight:"900",letterSpacing:2},heroTitle:{color:"white",fontSize:32,fontWeight:"900",marginTop:8},heroDescription:{color:"#eee",fontSize:13,lineHeight:19,marginTop:8},heroButtons:{flexDirection:"row",gap:10,marginTop:17},playButton:{backgroundColor:"white",borderRadius:8,paddingHorizontal:23,paddingVertical:11},playText:{color:"#111",fontWeight:"800"},listButton:{backgroundColor:"rgba(255,255,255,0.2)",borderRadius:8,paddingHorizontal:17,paddingVertical:11},listText:{color:"white",fontWeight:"800"},sectionHeading:{paddingHorizontal:18,marginTop:25,marginBottom:12,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},sectionTitle:{color:"white",fontSize:19,fontWeight:"800"},movieCard:{width:125,marginLeft:14},poster:{width:125,height:178,borderRadius:10,backgroundColor:"#24242d"},posterFallback:{justifyContent:"center",alignItems:"center"},fallbackText:{color:"#f43f5e",fontSize:50,fontWeight:"900"},movieTitle:{color:"white",fontSize:13,fontWeight:"700",marginTop:7},meta:{color:"#9999a5",fontSize:10,marginTop:4},empty:{color:"#9696a2",fontSize:13,paddingHorizontal:18,paddingBottom:8}});
