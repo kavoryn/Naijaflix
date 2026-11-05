@@ -1,12 +1,12 @@
 import { useEffect,useState } from "react";
-import { ActivityIndicator,Pressable,StyleSheet,Text,View,Alert } from "react-native";
+import { ActivityIndicator,Pressable,StyleSheet,Text,View } from "react-native";
 import { useLocalSearchParams,router } from "expo-router";
 import { VideoView,useVideoPlayer } from "expo-video";
 import { supabase } from "@/lib/supabase";
 
 export default function WatchScreen(){
- const {id}=useLocalSearchParams<{id:string}>();const [source,setSource]=useState<string|null>(null);const [loading,setLoading]=useState(true);const [message,setMessage]=useState("");
- const player=useVideoPlayer(source?{uri:source}:null,p=>{p.timeUpdateEventInterval=10;});
+ const {id}=useLocalSearchParams<{id:string}>();const [source,setSource]=useState<string|null>(null);const [resumeAt,setResumeAt]=useState(0);const [loading,setLoading]=useState(true);const [message,setMessage]=useState("");
+ const player=useVideoPlayer(null,p=>{p.timeUpdateEventInterval=10;});
  useEffect(()=>{let alive=true;(async()=>{
   const {data:{user}}=await supabase.auth.getUser();
   if(!user){if(alive){setMessage("Sign in to watch this title.");setLoading(false);}return;}
@@ -18,12 +18,14 @@ export default function WatchScreen(){
   }
   if(!movie.video_url){if(alive){setMessage("Video is not available yet.");setLoading(false);}return;}
   const {data:progress}=await supabase.from("watch_progress").select("progress_seconds").eq("user_id",user.id).eq("movie_id",id).maybeSingle();
-  if(alive){setSource(movie.video_url);setLoading(false);if(progress?.progress_seconds) player.currentTime=progress.progress_seconds;}
+  if(alive){setResumeAt(progress?.progress_seconds||0);setSource(movie.video_url);setLoading(false);}
  })();return()=>{alive=false}},[id]);
+ useEffect(()=>{if(!source)return;let alive=true;(async()=>{try{await player.replaceAsync({uri:source});if(alive&&resumeAt>0)player.currentTime=resumeAt;}catch(e){if(alive)setMessage("The video could not be loaded. Please try again.");}})();return()=>{alive=false}},[source,player]);
  useEffect(()=>{const sub=player.addListener("timeUpdate",async({currentTime})=>{
-  const {data:{user}}=await supabase.auth.getUser();if(!user||!Number.isFinite(currentTime))return;
+  if(!source||!Number.isFinite(currentTime))return;
+  const {data:{user}}=await supabase.auth.getUser();if(!user)return;
   await supabase.from("watch_progress").upsert({user_id:user.id,movie_id:id,progress_seconds:Math.floor(currentTime),completed:false,updated_at:new Date().toISOString()},{onConflict:"user_id,movie_id"});
- });return()=>sub.remove()},[id,player]);
+ });return()=>sub.remove()},[id,player,source]);
  if(loading)return <View style={s.center}><ActivityIndicator color="#f43f5e"/><Text style={s.copy}>Preparing your video…</Text></View>;
  if(message)return <View style={s.center}><Text style={s.message}>{message}</Text><Pressable style={s.button} onPress={()=>message.includes("Premium")?router.push("/subscribe"):router.back()}><Text style={s.buttonText}>{message.includes("Premium")?"Get Premium":"Go back"}</Text></Pressable></View>;
  return <View style={s.screen}><VideoView player={player} style={s.video} nativeControls contentFit="contain" allowsFullscreen allowsPictureInPicture/><Pressable style={s.back} onPress={()=>router.back()}><Text style={s.backText}>‹  Back to title</Text></Pressable></View>;
