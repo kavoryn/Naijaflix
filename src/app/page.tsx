@@ -6,8 +6,8 @@ export default async function Home() {
   const { data: { user } } = await supabase.auth.getUser();
 
   const { data: movieRows } = await supabase
-    .from("movies")
-    .select("id,title,synopsis,genre,release_year,duration_minutes,poster_url,video_url,featured,plan")
+    .from("movies_catalogue")
+    .select("id,title,synopsis,genre,release_year,duration_minutes,poster_url,featured,plan")
     .eq("published", true)
     .order("created_at", { ascending: false });
 
