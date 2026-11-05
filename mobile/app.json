@@ -24,7 +24,6 @@
     ],
     "experiments": {
       "typedRoutes": true
-    },
-    "owner": "kavoryn_ai"
+    }
   }
 }
